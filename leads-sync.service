@@ -1,0 +1,40 @@
+[Unit]
+Description=Rolling Riches WordPress to MySQL Lead Sync
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/rolling-riches-leads
+Environment="PATH=/opt/rolling-riches-leads/venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=/opt/rolling-riches-leads/.env
+
+# Main process
+ExecStart=/opt/rolling-riches-leads/venv/bin/python /opt/rolling-riches-leads/sync_to_mysql.py --loop --interval 300
+
+# Process management
+Restart=always
+RestartSec=10
+StartLimitInterval=200
+StartLimitBurst=5
+
+# Resource limits
+MemoryLimit=512M
+CPUQuota=50%
+
+# Security
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log /opt/rolling-riches-leads
+
+# Logging
+StandardOutput=append:/var/log/leads-sync.log
+StandardError=append:/var/log/leads-sync.error.log
+SyslogIdentifier=leads-sync
+
+[Install]
+WantedBy=multi-user.target
