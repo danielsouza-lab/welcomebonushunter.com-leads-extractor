@@ -286,51 +286,9 @@ systemctl is-active leads-sync
 mysql -e "SELECT MAX(sync_completed_at) FROM sync_log WHERE status='completed'"
 ```
 
-## 🤝 Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
-
-### Development Setup
-
-```bash
-# Install dev dependencies
-pip install -r requirements-dev.txt
-
-# Run code formatting
-black src/
-
-# Run linting
-flake8 src/
-mypy src/
-
-# Run tests
-pytest
-```
-
-### Code Style
-
-- Follow PEP 8
-- Use type hints
-- Write docstrings
-- Add unit tests
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- WordPress REST API team
-- Python Requests library
-- SQLAlchemy ORM
-- All contributors
-
-## 📞 Support
-
-For issues, questions, or suggestions:
-- Open an issue on GitHub
-- Email: support@rollingriches.com
-- Documentation: [Wiki](https://github.com/yourusername/wordpress-leads-extractor/wiki)
 
 ## 🚀 Roadmap
 
@@ -340,7 +298,3 @@ For issues, questions, or suggestions:
 - [ ] Export to CRM systems
 - [ ] Machine learning for lead scoring
 - [ ] Real-time webhooks
-
----
-
-**Built with ❤️ by Rolling Riches**
