@@ -289,12 +289,3 @@ mysql -e "SELECT MAX(sync_completed_at) FROM sync_log WHERE status='completed'"
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🚀 Roadmap
-
-- [ ] Support for more form plugins
-- [ ] Email notifications on sync failure
-- [ ] Web dashboard for monitoring
-- [ ] Export to CRM systems
-- [ ] Machine learning for lead scoring
-- [ ] Real-time webhooks
