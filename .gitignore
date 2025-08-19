@@ -104,8 +104,11 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
 .env.local
 .env.production
+.env.ghl
+.env.mysql
 .venv
 env/
 venv/

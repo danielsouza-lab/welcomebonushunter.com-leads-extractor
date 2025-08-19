@@ -19,7 +19,7 @@ class GHLClient:
         access_token: str,
         location_id: str,
         api_version: str = "2021-07-28",
-        base_url: str = "https://services.leadconnectorhq.com"
+        base_url: str = "https://rest.gohighlevel.com/v1"
     ):
         """
         Initialize GHL API client.

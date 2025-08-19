@@ -28,7 +28,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/var/log/leads_sync.log'),
+        logging.FileHandler('leads_sync.log'),
         logging.StreamHandler()
     ]
 )
@@ -166,6 +166,9 @@ class MySQLSync:
             'charset': 'utf8mb4',
             'cursorclass': DictCursor
         }
+        # Add SSL support for DigitalOcean
+        if os.getenv('MYSQL_SSL', 'false').lower() == 'true':
+            self.connection_params['ssl'] = {'ssl_disabled': False}
         self.cleaner = LeadCleaner()
     
     def get_connection(self):
@@ -178,17 +181,14 @@ class MySQLSync:
             with conn.cursor() as cursor:
                 # Get last successful sync
                 cursor.execute("""
-                    SELECT last_signup_date_synced, MAX(l.wp_id) as last_wp_id
-                    FROM sync_log s
-                    LEFT JOIN leads l ON 1=1
-                    WHERE s.status = 'completed'
-                    ORDER BY s.sync_completed_at DESC
-                    LIMIT 1
+                    SELECT MAX(l.signup_date) as last_signup_date, MAX(l.source_id) as last_wp_id
+                    FROM leads l
+                    WHERE l.source = 'wordpress'
                 """)
                 result = cursor.fetchone()
                 
                 if result:
-                    return result.get('last_signup_date_synced'), result.get('last_wp_id')
+                    return result.get('last_signup_date'), result.get('last_wp_id')
                     
                 return None, None
     
@@ -197,8 +197,8 @@ class MySQLSync:
         with self.get_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
-                    INSERT INTO sync_log (sync_started_at, status)
-                    VALUES (NOW(), 'running')
+                    INSERT INTO sync_log (sync_type, sync_started_at, status)
+                    VALUES ('wordpress_to_mysql', NOW(), 'running')
                 """)
                 conn.commit()
                 return cursor.lastrowid
@@ -235,32 +235,44 @@ class MySQLSync:
         processed['email'] = email
         processed['email_valid'] = email_valid
         
+        # Extract email domain
+        if email and '@' in email:
+            processed['email_domain'] = email.split('@')[1]
+        else:
+            processed['email_domain'] = None
+        
         # Clean phone
         phone_cleaned, phone_country, phone_valid = self.cleaner.clean_phone(
             raw_data.get('phone', '')
         )
         processed['phone'] = raw_data.get('phone', '')
-        processed['phone_cleaned'] = phone_cleaned
-        processed['phone_country_code'] = phone_country
+        processed['phone_country'] = phone_country
         processed['phone_valid'] = phone_valid
-        processed['is_mobile'] = None  # Could add mobile detection
+        processed['phone_type'] = 'mobile' if phone_valid else None
+        
+        # Names
+        processed['first_name'] = raw_data.get('first_name', '')
+        processed['last_name'] = raw_data.get('last_name', '')
         
         # Process dates
         signup_date_str = raw_data.get('signup_date', '')
         if signup_date_str:
             try:
-                processed['signup_date'] = datetime.strptime(
+                signup_dt = datetime.strptime(
                     signup_date_str, '%Y-%m-%d %H:%M:%S'
                 )
+                processed['signup_date'] = signup_dt.date()
+                processed['signup_datetime'] = signup_dt
             except:
-                processed['signup_date'] = datetime.now()
+                processed['signup_date'] = datetime.now().date()
+                processed['signup_datetime'] = datetime.now()
         else:
-            processed['signup_date'] = datetime.now()
+            processed['signup_date'] = datetime.now().date()
+            processed['signup_datetime'] = datetime.now()
         
         # Other fields
-        processed['source'] = raw_data.get('source', 'unknown')
-        processed['wp_id'] = int(raw_data.get('id', 0))
-        processed['signup_source'] = raw_data.get('source', '')
+        processed['source'] = 'wordpress'
+        processed['source_id'] = str(raw_data.get('id', ''))
         
         # Calculate quality score
         processed['quality_score'] = self.cleaner.calculate_quality_score(processed)
@@ -284,9 +296,9 @@ class MySQLSync:
                     # Check if exists
                     cursor.execute("""
                         SELECT id FROM leads 
-                        WHERE email = %s AND wp_id = %s
+                        WHERE email = %s
                         LIMIT 1
-                    """, (processed['email'], processed['wp_id']))
+                    """, (processed['email'],))
                     
                     existing = cursor.fetchone()
                     
@@ -294,7 +306,7 @@ class MySQLSync:
                         # Update last synced
                         cursor.execute("""
                             UPDATE leads 
-                            SET last_synced_at = NOW()
+                            SET updated_at = NOW()
                             WHERE id = %s
                         """, (existing['id'],))
                         conn.commit()
@@ -303,24 +315,28 @@ class MySQLSync:
                         # Insert new lead
                         cursor.execute("""
                             INSERT INTO leads (
-                                email, phone, signup_date, source, wp_id,
-                                phone_cleaned, phone_country_code, phone_valid,
-                                email_valid, signup_source, quality_score
+                                email, phone, first_name, last_name,
+                                signup_date, signup_datetime, source, source_id,
+                                phone_country, phone_type, phone_valid,
+                                email_valid, email_domain, quality_score
                             ) VALUES (
-                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                             )
                         """, (
                             processed['email'],
-                            processed['phone'],
-                            processed['signup_date'],
-                            processed['source'],
-                            processed['wp_id'],
-                            processed['phone_cleaned'],
-                            processed['phone_country_code'],
-                            processed['phone_valid'],
-                            processed['email_valid'],
-                            processed['signup_source'],
-                            processed['quality_score']
+                            processed.get('phone'),
+                            processed.get('first_name'),
+                            processed.get('last_name'),
+                            processed.get('signup_date'),
+                            processed.get('signup_datetime'),
+                            processed.get('source', 'wordpress'),
+                            processed.get('source_id'),
+                            processed.get('phone_country'),
+                            processed.get('phone_type'),
+                            processed.get('phone_valid', False),
+                            processed.get('email_valid', False),
+                            processed.get('email_domain'),
+                            processed.get('quality_score', 0)
                         ))
                         conn.commit()
                         return True, True
@@ -422,12 +438,11 @@ class LeadSyncService:
             self.mysql_sync.update_sync_log(
                 sync_id,
                 sync_completed_at=datetime.now(),
-                last_signup_date_synced=last_signup_date,
-                leads_fetched=stats['fetched'],
-                leads_inserted=stats['inserted'],
-                leads_updated=stats['updated'],
-                leads_skipped=stats['skipped'],
-                errors=stats['errors'],
+                total_records=stats['fetched'],
+                new_records=stats['inserted'],
+                updated_records=stats['updated'],
+                failed_records=stats['errors'],
+                duplicate_records=stats['updated'],
                 status='completed'
             )
             
