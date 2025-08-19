@@ -1,0 +1,23 @@
+[Unit]
+Description=Go High Level Lead Sync Service
+After=network.target mysql.service
+Wants=ghl-sync-retry.timer
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/wordpress-leads-extractor
+Environment="PATH=/opt/wordpress-leads-extractor/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/opt/wordpress-leads-extractor/venv/bin/python /opt/wordpress-leads-extractor/sync_to_ghl.py --continuous --interval 10
+Restart=always
+RestartSec=60
+StandardOutput=append:/var/log/ghl-sync/service.log
+StandardError=append:/var/log/ghl-sync/error.log
+
+# Resource limits
+MemoryLimit=512M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target

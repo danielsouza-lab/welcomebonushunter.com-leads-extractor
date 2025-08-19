@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-A production-ready system for extracting leads from WordPress forms and syncing them to a MySQL database with automatic data cleaning, validation, and quality scoring.
+A production-ready system for extracting leads from WordPress forms, syncing them to a MySQL database with automatic data cleaning, validation, and quality scoring, and pushing them to Go High Level CRM.
 
 ## 🌟 Features
 
@@ -15,6 +15,9 @@ A production-ready system for extracting leads from WordPress forms and syncing 
 - **🛡️ Duplicate Prevention** - Intelligent deduplication logic
 - **📈 Real-time Monitoring** - Track sync status and statistics
 - **🚀 Production Ready** - Systemd service, logging, error handling
+- **📤 Go High Level Integration** - Automatic sync to GHL CRM with retry logic
+- **🔄 Smart Retry System** - Failed leads are automatically retried with exponential backoff
+- **📝 Response Logging** - Complete audit trail of all GHL API interactions
 
 ## 📋 Table of Contents
 
@@ -40,6 +43,18 @@ WordPress Site                    This System                     MySQL Database
 │  Custom API │ ──REST API──> │   Extractor  │ ──Insert──>  │    Leads     │
 │   Plugin    │                │   & Cleaner  │               │   Database   │
 └─────────────┘                └──────────────┘               └──────────────┘
+                                      │                              │
+                                      ↓                              ↓
+                               ┌──────────────┐               ┌──────────────┐
+                               │  GHL Sync    │               │   Response   │
+                               │   Manager    │ ──Log──>      │     Log      │
+                               └──────────────┘               └──────────────┘
+                                      │
+                                      ↓
+                               ┌──────────────┐
+                               │ Go High Level│
+                               │     CRM      │
+                               └──────────────┘
 ```
 
 ## 📦 Prerequisites
@@ -140,6 +155,28 @@ python test_connection.py
 python extract_with_filters.py
 ```
 
+### Go High Level Sync
+
+```bash
+# Test GHL connection
+python sync_to_ghl.py --test
+
+# Sync once
+python sync_to_ghl.py --once
+
+# Sync with custom batch size
+python sync_to_ghl.py --once --batch-size 20
+
+# Retry failed leads
+python sync_to_ghl.py --retry-failed
+
+# View sync statistics
+python sync_to_ghl.py --stats
+
+# Run continuous sync (every 10 minutes)
+python sync_to_ghl.py --continuous --interval 10
+```
+
 ## 🔌 WordPress Plugin
 
 The custom WordPress plugin (`wordpress-plugin/rolling-riches-leads-api/`) exposes leads via REST API.
@@ -175,6 +212,19 @@ The custom WordPress plugin (`wordpress-plugin/rolling-riches-leads-api/`) expos
 
 - `lead_statistics` - Daily lead statistics
 - `daily_summary` - Quick dashboard view
+- `ghl_sync_status` - GHL sync monitoring
+- `ghl_failed_leads` - Failed leads requiring attention
+
+### GHL Integration Tables
+
+#### `ghl_sync_log` Table
+- Logs all GHL API interactions
+- Tracks request/response details
+- Manages retry scheduling
+
+#### `ghl_retry_summary` Table
+- Daily retry operation summaries
+- Performance metrics
 
 ## 🚢 Deployment
 
