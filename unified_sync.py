@@ -457,6 +457,76 @@ class UnifiedSyncService:
         finally:
             conn.close()
     
+    def retry_failed_leads(self, date=None):
+        """
+        Retry all failed GHL syncs from a specific date.
+        
+        Args:
+            date: Date to retry (defaults to today)
+        """
+        if date is None:
+            date = datetime.now().date()
+        
+        logger.info(f"Starting end-of-day retry for failed leads from {date}")
+        
+        conn = self.get_db_connection()
+        try:
+            with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                # Find all failed syncs from today
+                cursor.execute("""
+                    SELECT DISTINCT l.id
+                    FROM leads l
+                    INNER JOIN ghl_sync_log g ON l.id = g.lead_id
+                    WHERE DATE(g.request_timestamp) = %s
+                    AND g.status = 'failed'
+                    AND l.ghl_synced = FALSE
+                    ORDER BY l.quality_score DESC
+                """, (date,))
+                
+                failed_leads = cursor.fetchall()
+                
+                if not failed_leads:
+                    logger.info("No failed leads to retry")
+                    return
+                
+                logger.info(f"Found {len(failed_leads)} failed leads to retry")
+                
+                success_count = 0
+                fail_count = 0
+                
+                for lead_row in failed_leads:
+                    try:
+                        if self.sync_lead_to_ghl(lead_row['id']):
+                            success_count += 1
+                        else:
+                            fail_count += 1
+                        time.sleep(0.5)  # Rate limiting
+                    except Exception as e:
+                        logger.error(f"Error retrying lead {lead_row['id']}: {e}")
+                        fail_count += 1
+                
+                logger.info(f"Retry complete: {success_count} succeeded, {fail_count} failed")
+                
+                # Log retry summary
+                cursor.execute("""
+                    INSERT INTO sync_log (
+                        sync_type, sync_completed_at, total_records,
+                        new_records, failed_records, status
+                    ) VALUES (%s, NOW(), %s, %s, %s, %s)
+                """, (
+                    'end_of_day_retry',
+                    len(failed_leads),
+                    success_count,
+                    fail_count,
+                    'completed'
+                ))
+                conn.commit()
+                
+        except Exception as e:
+            logger.error(f"Error in retry process: {e}")
+        finally:
+            conn.close()
+    
     def run_continuous(self):
         """Run continuous sync with specified interval."""
         logger.info(f"Starting continuous sync (interval: {self.sync_interval} minutes)")
@@ -465,10 +535,24 @@ class UnifiedSyncService:
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGINT, signal_handler)
         
+        # Track last retry time
+        last_retry_date = None
+        retry_hour = int(os.getenv('RETRY_HOUR', 23))  # Default 11 PM
+        
         while not shutdown_requested:
             try:
                 # Run sync cycle
                 self.run_sync_cycle()
+                
+                # Check if it's time for end-of-day retry
+                now = datetime.now()
+                today = now.date()
+                
+                # Run retry at specified hour (default 11 PM)
+                if now.hour == retry_hour and last_retry_date != today:
+                    logger.info(f"Running end-of-day retry at {now}")
+                    self.retry_failed_leads(today)
+                    last_retry_date = today
                 
                 # Wait for next cycle
                 if not shutdown_requested:
@@ -496,6 +580,8 @@ def main():
     parser.add_argument('--continuous', action='store_true', help='Run continuously')
     parser.add_argument('--interval', type=int, default=10, help='Sync interval in minutes')
     parser.add_argument('--test', action='store_true', help='Test connections')
+    parser.add_argument('--retry-failed', action='store_true', help='Retry all failed GHL syncs from today')
+    parser.add_argument('--retry-date', type=str, help='Date to retry failed syncs (YYYY-MM-DD)')
     
     args = parser.parse_args()
     
@@ -544,7 +630,19 @@ def main():
                 logger.error("[FAIL] Go High Level connection failed")
         except Exception as e:
             logger.error(f"[FAIL] Go High Level error: {e}")
-            
+    
+    elif args.retry_failed:
+        # Run retry for failed leads
+        retry_date = None
+        if args.retry_date:
+            try:
+                retry_date = datetime.strptime(args.retry_date, '%Y-%m-%d').date()
+            except ValueError:
+                logger.error(f"Invalid date format: {args.retry_date}. Use YYYY-MM-DD")
+                sys.exit(1)
+        
+        service.retry_failed_leads(retry_date)
+        
     elif args.continuous or not args.once:
         # Default to continuous mode
         service.run_continuous()

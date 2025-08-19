@@ -60,6 +60,9 @@ MYSQL_SSL=true
 # Go High Level Configuration
 GHL_ACCESS_TOKEN=your_ghl_token
 GHL_LOCATION_ID=your_location_id
+
+# Retry Configuration (optional)
+RETRY_HOUR=23  # Hour for daily retry (0-23, default 23 = 11 PM)
 ```
 
 ### 4. Test connections
@@ -89,6 +92,7 @@ Once deployed, use the `wp-sync` command to manage the service:
 | `wp-sync monitor` | Show monitoring dashboard |
 | `wp-sync update` | Update from GitHub |
 | `wp-sync test` | Test all connections |
+| `wp-sync retry` | Manually retry failed GHL syncs |
 
 ## 🔄 How It Works
 
@@ -98,11 +102,17 @@ Once deployed, use the `wp-sync` command to manage the service:
    - Syncs new leads to Go High Level
    - Logs all operations
 
-2. **Automatic features**:
+2. **Every day at 11 PM**, the service:
+   - Identifies all failed GHL syncs from the day
+   - Retries them in order of quality score
+   - Logs retry results
+
+3. **Automatic features**:
    - Duplicate detection
    - Quality scoring (0-100)
    - Email/phone validation
-   - Retry on failures
+   - Automatic retry on failures
+   - Daily retry for persistent failures
    - Log rotation (30 days)
 
 ## 📁 File Locations

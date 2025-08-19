@@ -273,8 +273,11 @@ case "\$1" in
     test)
         cd ${PROJECT_DIR} && source venv/bin/activate && python unified_sync.py --test
         ;;
+    retry)
+        cd ${PROJECT_DIR} && source venv/bin/activate && python unified_sync.py --retry-failed
+        ;;
     *)
-        echo "Usage: wp-sync {start|stop|restart|status|logs|errors|monitor|update|test}"
+        echo "Usage: wp-sync {start|stop|restart|status|logs|errors|monitor|update|test|retry}"
         exit 1
         ;;
 esac
@@ -312,6 +315,9 @@ echo "  wp-sync errors   - View error logs"
 echo "  wp-sync monitor  - Show monitoring dashboard"
 echo "  wp-sync update   - Update from GitHub"
 echo "  wp-sync test     - Test all connections"
+echo "  wp-sync retry    - Manually retry failed GHL syncs"
 echo
-echo "The service will automatically sync every 10 minutes once started."
+echo "The service will:"
+echo "  - Sync every 10 minutes automatically"
+echo "  - Retry failed GHL syncs daily at 11 PM"
 echo
