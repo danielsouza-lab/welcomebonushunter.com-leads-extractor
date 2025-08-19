@@ -109,6 +109,12 @@ celerybeat.pid
 .env.production
 .env.ghl
 .env.mysql
+
+# Local documentation with sensitive info
+CLAUDE.md
+
+# Deployment scripts with credentials
+deployment-scripts/
 .venv
 env/
 venv/
